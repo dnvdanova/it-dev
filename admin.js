@@ -6,7 +6,7 @@ const adminArticlesTbody = document.getElementById('admin-articles-tbody');
 const jsonExportArea = document.getElementById('json-export-area');
 const stepsBuilderContainer = document.getElementById('steps-builder-container');
 
-const API_URL = 'http://localhost/it-support-kb/api.php';
+
 
 /**
  * Fitur Custom Confirmation Modal (Pengganti alert konfirmasi bawaan)
@@ -118,17 +118,40 @@ function showDashboard() {
 }
 
 /**
- * Fetch articles dari API MySQL
+ * Fetch articles dari API Supabase
  */
 async function fetchAdminArticles() {
   try {
-    const response = await fetch(`${API_URL}?action=get_articles`);
-    if (!response.ok) throw new Error('Gagal memuat data');
-    const data = await response.json();
-    articles = data;
+    const { data, error } = await supabase
+      .from('articles')
+      .select(`
+        id,
+        title,
+        description,
+        symptoms,
+        categories ( slug, name ),
+        article_steps ( step_text ),
+        article_tags ( tag_name )
+      `)
+      .order('id', { ascending: true });
+
+    if (error) throw error;
+    
+    const formattedData = data.map(article => ({
+      id: article.id,
+      title: article.title,
+      category: article.categories.slug,
+      categoryDisplay: article.categories.name,
+      description: article.description,
+      symptoms: article.symptoms,
+      steps: article.article_steps.map(s => s.step_text),
+      tags: article.article_tags.map(t => t.tag_name)
+    }));
+
+    articles = formattedData;
     renderAdminArticles();
   } catch (error) {
-    console.error('KB Admin: Gagal fetch data', error);
+    console.error('KB Admin: Gagal fetch data dari Supabase', error);
     showToast('Gagal terhubung ke database server.', 'error');
   }
 }
@@ -288,7 +311,7 @@ async function saveArticle(event) {
   event.preventDefault();
 
   const title = document.getElementById('art-title').value.trim();
-  const category = document.getElementById('art-category').value;
+  const categorySlug = document.getElementById('art-category').value;
   const description = document.getElementById('art-description').value.trim();
   const symptoms = document.getElementById('art-symptoms').value.trim();
 
@@ -298,39 +321,72 @@ async function saveArticle(event) {
   const tagsInput = document.getElementById('art-tags').value.trim();
   const tags = tagsInput ? tagsInput.split(',').map(tag => tag.trim().toLowerCase()).filter(tag => tag !== '') : [];
 
-  const payload = {
-    title, category, description, symptoms, steps, tags
-  };
-
   const submitBtn = document.getElementById('btn-submit-article');
   submitBtn.disabled = true;
   submitBtn.style.opacity = '0.7';
 
   try {
+    // Get category ID
+    const { data: catData, error: catError } = await supabase
+      .from('categories')
+      .select('id')
+      .eq('slug', categorySlug)
+      .single();
+    if (catError) throw new Error('Kategori tidak valid');
+
+    const category_id = catData.id;
+    let currentArticleId = editArticleId;
+
     if (editArticleId !== null) {
       // ── UPDATE MODE ─────────────────────────────────────────────────────────
-      payload.id = editArticleId;
-      const res = await fetch(`${API_URL}?action=update_article`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Gagal update');
-
+      const { error: updateError } = await supabase
+        .from('articles')
+        .update({ category_id, title, description, symptoms })
+        .eq('id', editArticleId);
+      if (updateError) throw updateError;
+      
+      // Delete old steps and tags (Supabase REST will delete them, we just insert new)
+      await supabase.from('article_steps').delete().eq('article_id', editArticleId);
+      await supabase.from('article_tags').delete().eq('article_id', editArticleId);
+      
       showToast('Artikel berhasil diperbarui!', 'success');
-      cancelEdit(); // Kembali ke mode tambah & reset form
     } else {
       // ── CREATE MODE ──────────────────────────────────────────────────────────
-      const res = await fetch(`${API_URL}?action=create_article`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Gagal create');
-
+      const { data: newArticle, error: createError } = await supabase
+        .from('articles')
+        .insert([{ category_id, title, description, symptoms }])
+        .select()
+        .single();
+      if (createError) throw createError;
+      
+      currentArticleId = newArticle.id;
       showToast('Artikel berhasil ditambahkan! Artikel ini sekarang aktif di Halaman Utama.', 'success');
+    }
+
+    // Insert steps
+    if (steps.length > 0) {
+      const stepInserts = steps.map((step, index) => ({
+        article_id: currentArticleId,
+        step_order: index + 1,
+        step_text: step
+      }));
+      const { error: stepsError } = await supabase.from('article_steps').insert(stepInserts);
+      if (stepsError) throw stepsError;
+    }
+
+    // Insert tags
+    if (tags.length > 0) {
+      const tagInserts = tags.map(tag => ({
+        article_id: currentArticleId,
+        tag_name: tag
+      }));
+      const { error: tagsError } = await supabase.from('article_tags').insert(tagInserts);
+      if (tagsError) throw tagsError;
+    }
+
+    if (editArticleId !== null) {
+      cancelEdit();
+    } else {
       document.getElementById('article-form').reset();
       resetStepsBuilder();
     }
@@ -362,13 +418,8 @@ async function deleteArticle(articleId) {
   }
 
   try {
-    const res = await fetch(`${API_URL}?action=delete_article`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: articleId })
-    });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || 'Gagal menghapus');
+    const { error } = await supabase.from('articles').delete().eq('id', articleId);
+    if (error) throw error;
 
     await fetchAdminArticles();
     showToast('Artikel berhasil dihapus.', 'success');
@@ -507,17 +558,41 @@ showDashboard = function () {
  */
 async function fetchDashboardStats() {
   try {
-    const res = await fetch(`${API_URL}?action=get_dashboard_stats`);
-    if (!res.ok) throw new Error();
-    const stats = await res.json();
+    const now = new Date();
+    const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    
+    // Total in
+    const { count: ticketsIn, error: errIn } = await supabase
+      .from('tickets')
+      .select('*', { count: 'exact', head: true })
+      .gte('created_at', `${currentMonth}-01`);
+      
+    // Total out
+    const { count: ticketsOut, error: errOut } = await supabase
+      .from('tickets')
+      .select('*', { count: 'exact', head: true })
+      .eq('status', 'Selesai')
+      .gte('completed_at', `${currentMonth}-01`);
 
-    document.getElementById('stat-month-label').textContent = stats.current_month;
-    document.getElementById('stat-tickets-in').textContent = stats.tickets_in;
-    document.getElementById('stat-tickets-out').textContent = stats.tickets_out;
-    document.getElementById('stat-tickets-process').textContent = stats.tickets_process;
-    document.getElementById('stat-tickets-canceled').textContent = stats.tickets_canceled;
+    // Total process
+    const { count: ticketsProcess, error: errProcess } = await supabase
+      .from('tickets')
+      .select('*', { count: 'exact', head: true })
+      .eq('status', 'Proses');
+
+    // Total canceled
+    const { count: ticketsCanceled, error: errCanceled } = await supabase
+      .from('tickets')
+      .select('*', { count: 'exact', head: true })
+      .eq('status', 'Batal');
+
+    document.getElementById('stat-month-label').textContent = now.toLocaleString('id-ID', { month: 'long', year: 'numeric' });
+    document.getElementById('stat-tickets-in').textContent = ticketsIn || 0;
+    document.getElementById('stat-tickets-out').textContent = ticketsOut || 0;
+    document.getElementById('stat-tickets-process').textContent = ticketsProcess || 0;
+    document.getElementById('stat-tickets-canceled').textContent = ticketsCanceled || 0;
   } catch (err) {
-    console.error("Gagal mengambil statistik dashboard.");
+    console.error("Gagal mengambil statistik dashboard.", err);
   }
 }
 
@@ -526,9 +601,13 @@ async function fetchDashboardStats() {
  */
 async function fetchTickets() {
   try {
-    const res = await fetch(`${API_URL}?action=get_tickets`);
-    if (!res.ok) throw new Error();
-    tickets = await res.json();
+    const { data, error } = await supabase
+      .from('tickets')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+    tickets = data;
     renderTickets();
   } catch (err) {
     console.error("Gagal mengambil daftar tiket.");
@@ -569,7 +648,7 @@ function renderTickets() {
         <div class="admin-table-title" style="display: flex; align-items: center; flex-wrap: wrap; gap: 4px;">
           <span class="ticket-id-badge">${ticketIdFormatted}</span>
           ${escapeHtml(ticket.customer_name)} 
-          <span style="font-size: 0.8rem; font-weight: 400; color: #64748b;">(${escapeHtml(ticket.phone_number)})</span>
+          <span style="font-size: 0.8rem; font-weight: 400; color: #64748b;">(${escapeHtml(ticket.phone_number || '')})</span>
         </div>
         <div class="ticket-meta">
           <strong>Pkt:</strong> ${escapeHtml(ticket.device_info)} <br>
@@ -617,33 +696,28 @@ async function saveTicket(event) {
     customer_name: document.getElementById('ticket-customer').value.trim(),
     phone_number: document.getElementById('ticket-phone').value.trim(),
     device_info: document.getElementById('ticket-device').value.trim(),
-    issue: document.getElementById('ticket-issue').value.trim()
+    issue: document.getElementById('ticket-issue').value.trim(),
+    status: 'Masuk'
   };
 
   const shouldPrint = document.getElementById('print-on-save').checked;
 
   try {
-    const res = await fetch(`${API_URL}?action=create_ticket`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data)
-    });
+    const { data: newTicket, error } = await supabase
+      .from('tickets')
+      .insert([data])
+      .select()
+      .single();
 
-    if (!res.ok) throw new Error();
-    const responseData = await res.json();
+    if (error) throw error;
 
-    // Reset Form
     document.getElementById('ticket-form').reset();
-
-    // Refresh Data
     fetchDashboardStats();
     fetchTickets();
 
-    // Otomatis cetak tanda terima jika checkbox dicentang
     if (shouldPrint) {
-      // Tunggu sebentar agar render UI selesai sebelum ngeprint
       setTimeout(() => {
-        printTicket(responseData.id, data);
+        printTicket(newTicket.id, newTicket);
         showToast("Tiket perbaikan berhasil disimpan!", "success");
       }, 300);
     } else {
@@ -660,15 +734,20 @@ async function saveTicket(event) {
  */
 async function updateTicketStatus(id, newStatus) {
   try {
-    const res = await fetch(`${API_URL}?action=update_ticket_status`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: id, status: newStatus })
-    });
+    const updateData = { status: newStatus };
+    if (newStatus === 'Selesai') {
+      updateData.completed_at = new Date().toISOString();
+    } else {
+      updateData.completed_at = null;
+    }
 
-    if (!res.ok) throw new Error();
+    const { error } = await supabase
+      .from('tickets')
+      .update(updateData)
+      .eq('id', id);
 
-    // Refresh
+    if (error) throw error;
+
     fetchDashboardStats();
     fetchTickets();
     showToast("Status tiket berhasil diperbarui!", "success");
@@ -685,13 +764,12 @@ async function deleteTicket(id) {
   if (!isConfirmed) return;
 
   try {
-    const res = await fetch(`${API_URL}?action=delete_ticket`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: id })
-    });
+    const { error } = await supabase
+      .from('tickets')
+      .delete()
+      .eq('id', id);
 
-    if (!res.ok) throw new Error();
+    if (error) throw error;
 
     fetchDashboardStats();
     fetchTickets();
