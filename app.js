@@ -238,41 +238,22 @@ document.addEventListener('DOMContentLoaded', () => {
   fetchArticlesFromServer();
 });
 
+// URL API Backend (sesuaikan dengan path XAMPP Anda nanti)
+const API_URL = 'http://localhost/it-support-kb/api.php';
+
 /**
- * Mengambil data artikel dari Supabase
+ * Mengambil data artikel dari database MySQL via API PHP
  */
 async function fetchArticlesFromServer() {
   try {
-    const { data, error } = await supabaseClient
-      .from('articles')
-      .select(`
-        id,
-        title,
-        description,
-        symptoms,
-        categories ( slug, name ),
-        article_steps ( step_text ),
-        article_tags ( tag_name )
-      `)
-      .order('id', { ascending: true });
-
-    if (error) throw error;
+    const response = await fetch(`${API_URL}?action=get_articles`);
+    if (!response.ok) throw new Error('Gagal mengambil data dari server');
     
-    const formattedData = data.map(article => ({
-      id: article.id,
-      title: article.title,
-      category: article.categories.slug,
-      categoryDisplay: article.categories.name,
-      description: article.description,
-      symptoms: article.symptoms,
-      steps: article.article_steps.map(s => s.step_text),
-      tags: article.article_tags.map(t => t.tag_name)
-    }));
-
-    articles = formattedData;
+    const data = await response.json();
+    articles = data;
     renderArticles();
   } catch (error) {
-    console.error('KB: Terjadi kesalahan saat memuat artikel dari Supabase:', error);
+    console.error('KB: Terjadi kesalahan saat memuat artikel:', error);
     // Fallback jika API belum jalan
     if (typeof defaultArticles !== 'undefined') {
       articles = defaultArticles;
