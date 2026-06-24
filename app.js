@@ -243,7 +243,7 @@ document.addEventListener('DOMContentLoaded', () => {
  */
 async function fetchArticlesFromServer() {
   try {
-    const { data, error } = await supabase
+    const { data, error } = await supabaseClient
       .from('articles')
       .select(`
         id,

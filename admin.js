@@ -122,7 +122,7 @@ function showDashboard() {
  */
 async function fetchAdminArticles() {
   try {
-    const { data, error } = await supabase
+    const { data, error } = await supabaseClient
       .from('articles')
       .select(`
         id,
@@ -327,7 +327,7 @@ async function saveArticle(event) {
 
   try {
     // Get category ID
-    const { data: catData, error: catError } = await supabase
+    const { data: catData, error: catError } = await supabaseClient
       .from('categories')
       .select('id')
       .eq('slug', categorySlug)
@@ -339,20 +339,20 @@ async function saveArticle(event) {
 
     if (editArticleId !== null) {
       // ── UPDATE MODE ─────────────────────────────────────────────────────────
-      const { error: updateError } = await supabase
+      const { error: updateError } = await supabaseClient
         .from('articles')
         .update({ category_id, title, description, symptoms })
         .eq('id', editArticleId);
       if (updateError) throw updateError;
       
       // Delete old steps and tags (Supabase REST will delete them, we just insert new)
-      await supabase.from('article_steps').delete().eq('article_id', editArticleId);
-      await supabase.from('article_tags').delete().eq('article_id', editArticleId);
+      await supabaseClient.from('article_steps').delete().eq('article_id', editArticleId);
+      await supabaseClient.from('article_tags').delete().eq('article_id', editArticleId);
       
       showToast('Artikel berhasil diperbarui!', 'success');
     } else {
       // ── CREATE MODE ──────────────────────────────────────────────────────────
-      const { data: newArticle, error: createError } = await supabase
+      const { data: newArticle, error: createError } = await supabaseClient
         .from('articles')
         .insert([{ category_id, title, description, symptoms }])
         .select()
@@ -370,7 +370,7 @@ async function saveArticle(event) {
         step_order: index + 1,
         step_text: step
       }));
-      const { error: stepsError } = await supabase.from('article_steps').insert(stepInserts);
+      const { error: stepsError } = await supabaseClient.from('article_steps').insert(stepInserts);
       if (stepsError) throw stepsError;
     }
 
@@ -380,7 +380,7 @@ async function saveArticle(event) {
         article_id: currentArticleId,
         tag_name: tag
       }));
-      const { error: tagsError } = await supabase.from('article_tags').insert(tagInserts);
+      const { error: tagsError } = await supabaseClient.from('article_tags').insert(tagInserts);
       if (tagsError) throw tagsError;
     }
 
@@ -418,7 +418,7 @@ async function deleteArticle(articleId) {
   }
 
   try {
-    const { error } = await supabase.from('articles').delete().eq('id', articleId);
+    const { error } = await supabaseClient.from('articles').delete().eq('id', articleId);
     if (error) throw error;
 
     await fetchAdminArticles();
@@ -562,26 +562,26 @@ async function fetchDashboardStats() {
     const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
     
     // Total in
-    const { count: ticketsIn, error: errIn } = await supabase
+    const { count: ticketsIn, error: errIn } = await supabaseClient
       .from('tickets')
       .select('*', { count: 'exact', head: true })
       .gte('created_at', `${currentMonth}-01`);
       
     // Total out
-    const { count: ticketsOut, error: errOut } = await supabase
+    const { count: ticketsOut, error: errOut } = await supabaseClient
       .from('tickets')
       .select('*', { count: 'exact', head: true })
       .eq('status', 'Selesai')
       .gte('completed_at', `${currentMonth}-01`);
 
     // Total process
-    const { count: ticketsProcess, error: errProcess } = await supabase
+    const { count: ticketsProcess, error: errProcess } = await supabaseClient
       .from('tickets')
       .select('*', { count: 'exact', head: true })
       .eq('status', 'Proses');
 
     // Total canceled
-    const { count: ticketsCanceled, error: errCanceled } = await supabase
+    const { count: ticketsCanceled, error: errCanceled } = await supabaseClient
       .from('tickets')
       .select('*', { count: 'exact', head: true })
       .eq('status', 'Batal');
@@ -601,7 +601,7 @@ async function fetchDashboardStats() {
  */
 async function fetchTickets() {
   try {
-    const { data, error } = await supabase
+    const { data, error } = await supabaseClient
       .from('tickets')
       .select('*')
       .order('created_at', { ascending: false });
@@ -703,7 +703,7 @@ async function saveTicket(event) {
   const shouldPrint = document.getElementById('print-on-save').checked;
 
   try {
-    const { data: newTicket, error } = await supabase
+    const { data: newTicket, error } = await supabaseClient
       .from('tickets')
       .insert([data])
       .select()
@@ -741,7 +741,7 @@ async function updateTicketStatus(id, newStatus) {
       updateData.completed_at = null;
     }
 
-    const { error } = await supabase
+    const { error } = await supabaseClient
       .from('tickets')
       .update(updateData)
       .eq('id', id);
@@ -764,7 +764,7 @@ async function deleteTicket(id) {
   if (!isConfirmed) return;
 
   try {
-    const { error } = await supabase
+    const { error } = await supabaseClient
       .from('tickets')
       .delete()
       .eq('id', id);
