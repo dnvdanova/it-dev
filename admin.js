@@ -55,7 +55,6 @@ function confirmAction(message) {
 
 // Global Variables
 let articles = []; // Data artikel dari server
-let tickets = []; // Data tiket dari server
 
 // Edit State — null berarti mode Tambah Baru, angka berarti ID artikel yang sedang diedit
 let editArticleId = null;
