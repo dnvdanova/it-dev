@@ -135,7 +135,7 @@ async function fetchAdminArticles() {
       .order('id', { ascending: true });
 
     if (error) throw error;
-    
+
     const formattedData = data.map(article => ({
       id: article.id,
       title: article.title,
@@ -343,11 +343,11 @@ async function saveArticle(event) {
         .update({ category_id, title, description, symptoms })
         .eq('id', editArticleId);
       if (updateError) throw updateError;
-      
+
       // Delete old steps and tags
       await supabaseClient.from('article_steps').delete().eq('article_id', editArticleId);
       await supabaseClient.from('article_tags').delete().eq('article_id', editArticleId);
-      
+
       showToast('Artikel berhasil diperbarui!', 'success');
     } else {
       // ── CREATE MODE ──────────────────────────────────────────────────────────
@@ -357,7 +357,7 @@ async function saveArticle(event) {
         .select()
         .single();
       if (createError) throw createError;
-      
+
       currentArticleId = newArticle.id;
       showToast('Artikel berhasil ditambahkan! Artikel ini sekarang aktif di Halaman Utama.', 'success');
     }
@@ -558,12 +558,12 @@ async function fetchDashboardStats() {
   try {
     const now = new Date();
     const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-    
+
     const { count: ticketsIn, error: errIn } = await supabaseClient
       .from('tickets')
       .select('*', { count: 'exact', head: true })
       .gte('created_at', `${currentMonth}-01`);
-      
+
     const { count: ticketsOut, error: errOut } = await supabaseClient
       .from('tickets')
       .select('*', { count: 'exact', head: true })
@@ -804,7 +804,14 @@ function printTicket(id, ticketData = null) {
   document.getElementById('print-ticket-issue').textContent = ticketData.issue;
 
   // Panggil fitur pencetakan bawaan browser
+  const receiptContainer = document.getElementById('print-receipt-container');
+  const originalDisplay = receiptContainer.style.display;
+  receiptContainer.style.display = 'block';
+  
   window.print();
+  
+  // Restore original display
+  receiptContainer.style.display = originalDisplay;
 }
 
 /* ==========================================================================
