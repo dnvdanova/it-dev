@@ -85,7 +85,7 @@ function handleLogin(event) {
   const usernameInput = document.getElementById('username').value.trim();
   const passwordInput = document.getElementById('password').value.trim();
 
-  if (usernameInput === 'it' && passwordInput === 'dev') {
+  if (usernameInput.toLowerCase() === 'it' && passwordInput.toLowerCase() === 'dev') {
     sessionStorage.setItem('admin_logged', 'true');
     loginErrorMsg.style.display = 'none';
     showDashboard();
