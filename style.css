@@ -1463,6 +1463,50 @@ select.form-input {
   color: var(--primary);
 }
 
+/* ==========================================================================
+   TOAST NOTIFICATIONS (NEW MODERN DESIGN)
+   ========================================================================== */
+.toast-container {
+  position: fixed;
+  top: 24px;
+  right: 24px;
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  pointer-events: none;
+}
+
+.toast {
+  pointer-events: auto;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-radius: 12px;
+  padding: 16px 20px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.08), 0 4px 12px rgba(0,0,0,0.05);
+  border-left: 5px solid;
+  min-width: 320px;
+  max-width: 400px;
+  
+  /* Animasi masuk dari atas/kanan */
+  transform: translateX(120%);
+  opacity: 0;
+  transition: transform 0.4s cubic-bezier(0.68, -0.55, 0.27, 1.55), opacity 0.3s ease;
+}
+
+/* Dark mode support if body has .dark or using media query */
+@media (prefers-color-scheme: dark) {
+  body:not(.light) .toast {
+    background: rgba(30, 41, 59, 0.95);
+    color: #f8fafc;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.3), 0 4px 12px rgba(0,0,0,0.2);
+  }
+}
+
 .toast.show {
   transform: translateX(0);
   opacity: 1;
@@ -1480,11 +1524,18 @@ select.form-input {
   display: flex;
   align-items: center;
   justify-content: center;
+  background: rgba(16, 185, 129, 0.1);
+  padding: 8px;
+  border-radius: 50%;
+}
+
+.toast-error .toast-icon {
+  background: rgba(239, 68, 68, 0.1);
 }
 
 .toast-icon svg {
-  width: 26px;
-  height: 26px;
+  width: 22px;
+  height: 22px;
 }
 
 .toast-success .toast-icon {
@@ -1496,10 +1547,11 @@ select.form-input {
 }
 
 .toast-message {
-  color: var(--text-primary);
-  font-weight: 700;
-  font-size: 1.05rem;
-  line-height: 1.4;
+  color: inherit;
+  font-weight: 600;
+  font-size: 1rem;
+  line-height: 1.5;
+  flex: 1;
 }
 
 /* ==========================================================================
