@@ -55,6 +55,7 @@ function confirmAction(message) {
 
 // Global Variables
 let articles = []; // Data artikel dari server
+let tickets = []; // Data tiket dari server
 
 // Edit State — null berarti mode Tambah Baru, angka berarti ID artikel yang sedang diedit
 let editArticleId = null;
@@ -803,15 +804,17 @@ function printTicket(id, ticketData = null) {
   document.getElementById('print-ticket-device').textContent = ticketData.device_info;
   document.getElementById('print-ticket-issue').textContent = ticketData.issue;
 
-  // Panggil fitur pencetakan bawaan browser
+  // Set display block to allow printing
   const receiptContainer = document.getElementById('print-receipt-container');
-  const originalDisplay = receiptContainer.style.display;
   receiptContainer.style.display = 'block';
   
-  window.print();
+  // Restore display after print dialog closes
+  window.onafterprint = () => {
+    receiptContainer.style.display = 'none';
+  };
   
-  // Restore original display
-  receiptContainer.style.display = originalDisplay;
+  // Call browser print
+  window.print();
 }
 
 /* ==========================================================================
