@@ -77,6 +77,10 @@
           <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: text-bottom; margin-right: 6px;"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
           Tiket Servis
         </button>
+        <button class="admin-tab" id="tab-receipts" onclick="switchTab('receipts')">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: text-bottom; margin-right: 6px;"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>
+          Kwitansi
+        </button>
       </div>
       
       <!-- ================= VIEW: ARTICLES ================= -->
@@ -232,7 +236,7 @@
           <h2 class="admin-card-title">
             <span style="display:flex;align-items:center;gap:8px;">
               <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#16a34a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
-              Rekapitulasi Perbaikan Selesai
+              Rekapitulasi Tiket Perbaikan
             </span>
             <select id="recap-year-select" class="form-input" style="width:auto;height:36px;font-size:0.85rem;padding:0 32px 0 12px;" onchange="fetchMonthlyRecap()">
             </select>
@@ -309,6 +313,89 @@
 
       </div> <!-- End View Tickets -->
 
+      <!-- ================= VIEW: RECEIPTS ================= -->
+      <div id="view-receipts" style="display: none;">
+        <div class="admin-grid">
+          <!-- Receipt Form -->
+          <section class="admin-card">
+            <h2 class="admin-card-title">Buat Kwitansi Pembayaran</h2>
+            <form id="receipt-form" onsubmit="saveReceipt(event)">
+              <div class="form-group">
+                <label class="form-label" for="receipt-ticket-select">Pilih Tiket Selesai</label>
+                <select class="form-input" id="receipt-ticket-select" required onchange="fillReceiptFromTicket()">
+                  <option value="">-- Pilih tiket --</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="receipt-number">No. Kwitansi</label>
+                <input type="text" class="form-input" id="receipt-number" required placeholder="KW-2026-0001" readonly>
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="receipt-received-from">Telah Diterima Dari</label>
+                <input type="text" class="form-input" id="receipt-received-from" required placeholder="Nama pelanggan">
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="receipt-amount">Jumlah Uang (Rp)</label>
+                <input type="number" class="form-input" id="receipt-amount" required min="0" placeholder="1250000" oninput="convertAmountToWords()">
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="receipt-amount-words">Terbilang</label>
+                <input type="text" class="form-input" id="receipt-amount-words" required placeholder="Satu Juta Dua Ratus Lima Puluh Ribu Rupiah">
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="receipt-payment-for">Untuk Pembayaran</label>
+                <textarea class="form-textarea" id="receipt-payment-for" required placeholder="Perbaikan Mainboard Laptop ASUS ROG STRIX..."></textarea>
+              </div>
+              <div class="form-row" style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                <div class="form-group">
+                  <label class="form-label" for="receipt-date">Tanggal</label>
+                  <input type="date" class="form-input" id="receipt-date" required>
+                </div>
+                <div class="form-group">
+                  <label class="form-label" for="receipt-warranty">Garansi (hari)</label>
+                  <input type="number" class="form-input" id="receipt-warranty" value="30" min="0">
+                </div>
+              </div>
+              <div class="form-row" style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                <div class="form-group">
+                  <label class="form-label" for="receipt-location">Lokasi</label>
+                  <input type="text" class="form-input" id="receipt-location" value="Samarinda" required>
+                </div>
+                <div class="form-group">
+                  <label class="form-label" for="receipt-cashier">Nama Kasir/Teknisi</label>
+                  <input type="text" class="form-input" id="receipt-cashier" value="Kasir" required>
+                </div>
+              </div>
+              <button type="submit" class="btn-primary" style="margin-top: 10px;">
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                Simpan & Cetak Kwitansi
+              </button>
+            </form>
+          </section>
+
+          <!-- Receipt List -->
+          <section class="admin-card">
+            <h2 class="admin-card-title">Daftar Kwitansi</h2>
+            <div class="table-wrapper">
+              <table class="admin-table">
+                <thead>
+                  <tr>
+                    <th>No. Kwitansi</th>
+                    <th>Pelanggan</th>
+                    <th>Jumlah</th>
+                    <th>Tanggal</th>
+                    <th style="width: 120px; text-align: center;">Aksi</th>
+                  </tr>
+                </thead>
+                <tbody id="admin-receipts-tbody">
+                  <tr><td colspan="5" style="text-align: center; color: var(--text-muted); padding: 24px;">Memuat data kwitansi...</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+        </div>
+      </div> <!-- End View Receipts -->
+
     </main>
   </div>
 
@@ -335,6 +422,65 @@
       <div class="receipt-footer">
         <p>Terima kasih telah mempercayakan perbaikan perangkat Anda kepada kami.</p>
         <p>Simpan tanda terima ini untuk pengambilan barang.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Payment Receipt Print Modal -->
+  <div id="print-payment-receipt-container" style="display: none;">
+    <div class="payment-receipt">
+      <div class="payment-receipt-header">
+        <div class="payment-receipt-brand">
+          <h1>IT DEV SERVICE</h1>
+          <p>Jl. DI Panjaitan No. 12, Samarinda, Kalimantan Timur</p>
+          <p>Telp: 0822-5509-7770 | Email: support@itdevservice.id</p>
+        </div>
+        <div class="payment-receipt-title">
+          <h2>KWITANSI</h2>
+          <p>No Kwitansi: <strong id="print-receipt-number">KW-0000</strong></p>
+          <p>Tanggal: <strong id="print-receipt-date">-</strong></p>
+        </div>
+      </div>
+
+      <div class="payment-receipt-body">
+        <div class="payment-receipt-row">
+          <span class="payment-receipt-label">Telah Diterima Dari</span>
+          <span class="payment-receipt-colon">:</span>
+          <span class="payment-receipt-value" id="print-receipt-received">-</span>
+        </div>
+        <div class="payment-receipt-row">
+          <span class="payment-receipt-label">Uang Sejumlah</span>
+          <span class="payment-receipt-colon">:</span>
+          <span class="payment-receipt-value payment-receipt-amount-words" id="print-receipt-words">-</span>
+        </div>
+        <div class="payment-receipt-row">
+          <span class="payment-receipt-label">Untuk Pembayaran</span>
+          <span class="payment-receipt-colon">:</span>
+          <span class="payment-receipt-value" id="print-receipt-for">-</span>
+        </div>
+        <div class="payment-receipt-row">
+          <span class="payment-receipt-label">Sesuai Tiket Service</span>
+          <span class="payment-receipt-colon">:</span>
+          <span class="payment-receipt-value" id="print-receipt-ticket">-</span>
+        </div>
+      </div>
+
+      <div class="payment-receipt-amount-box">
+        <span id="print-receipt-amount">Rp 0,-</span>
+      </div>
+
+      <div class="payment-receipt-footer">
+        <div class="payment-receipt-place-date">
+          <span id="print-receipt-place-date">Samarinda, 30 Juni 2026</span>
+        </div>
+        <div class="payment-receipt-signature">
+          <p id="print-receipt-cashier">Kasir</p>
+          <p>Kasir / Teknisi</p>
+        </div>
+        <div class="payment-receipt-note">
+          <p>* Kwitansi ini adalah bukti pembayaran yang sah. Terima kasih atas kepercayaan Anda menggunakan layanan kami.</p>
+          <p id="print-receipt-warranty">Garansi Perbaikan: 30 Hari sejak tanggal penyerahan barang kembali.</p>
+        </div>
       </div>
     </div>
   </div>

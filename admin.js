@@ -516,42 +516,57 @@ let tickets = []; // Menyimpan data tiket dari server
 function switchTab(tabName) {
   const tabArticlesBtn = document.getElementById('tab-articles');
   const tabTicketsBtn = document.getElementById('tab-tickets');
+  const tabReceiptsBtn = document.getElementById('tab-receipts');
   const viewArticles = document.getElementById('view-articles');
   const viewTickets = document.getElementById('view-tickets');
+  const viewReceipts = document.getElementById('view-receipts');
+
+  // Reset active state
+  tabArticlesBtn.classList.remove('active');
+  tabTicketsBtn.classList.remove('active');
+  tabReceiptsBtn.classList.remove('active');
+  viewArticles.style.display = 'none';
+  viewTickets.style.display = 'none';
+  viewReceipts.style.display = 'none';
 
   if (tabName === 'articles') {
     tabArticlesBtn.classList.add('active');
-    tabTicketsBtn.classList.remove('active');
-    viewArticles.style.display = 'grid'; // .admin-grid uses display: grid
-    viewTickets.style.display = 'none';
-  } else {
-    tabArticlesBtn.classList.remove('active');
+    viewArticles.style.display = 'grid';
+  } else if (tabName === 'tickets') {
     tabTicketsBtn.classList.add('active');
-    viewArticles.style.display = 'none';
     viewTickets.style.display = 'block';
-
-    // Muat data khusus tab tiket saat dibuka
     fetchDashboardStats();
     fetchTickets();
     initRecapYearSelector();
     fetchMonthlyRecap();
+  } else if (tabName === 'receipts') {
+    tabReceiptsBtn.classList.add('active');
+    viewReceipts.style.display = 'block';
+    fetchTickets();
+    fetchReceipts();
+    initReceiptForm();
   }
 }
 
 /**
- * Update showDashboard untuk menampilkan tiket jika tab tiket yang aktif
+ * Update showDashboard untuk menampilkan tab yang sedang aktif
  */
 const originalShowDashboard = showDashboard;
 showDashboard = function () {
-  originalShowDashboard(); // Panggil fungsi aslinya untuk menyembunyikan login form dsb
+  originalShowDashboard();
 
-  // Periksa tab mana yang sedang aktif
   const tabTicketsBtn = document.getElementById('tab-tickets');
+  const tabReceiptsBtn = document.getElementById('tab-receipts');
+  
   if (tabTicketsBtn && tabTicketsBtn.classList.contains('active')) {
     fetchDashboardStats();
     fetchTickets();
     initRecapYearSelector();
     fetchMonthlyRecap();
+  } else if (tabReceiptsBtn && tabReceiptsBtn.classList.contains('active')) {
+    fetchTickets();
+    fetchReceipts();
+    initReceiptForm();
   }
 };
 
@@ -929,6 +944,7 @@ function formatDaysHours(daysDecimal) {
 
 /**
  * Mengambil data tiket dan menghitung statistik bulanan (total tiket masuk per bulan)
+ * Selalu menampilkan grafik Jan-Des, meskipun data kosong
  */
 async function fetchMonthlyRecap() {
   const yearSelect = document.getElementById('recap-year-select');
@@ -938,26 +954,38 @@ async function fetchMonthlyRecap() {
   const summaryContainer = document.getElementById('recap-yearly-summary');
   const chartContainer = document.getElementById('recap-chart-container');
   
+  // Loading state
+  summaryContainer.innerHTML = `
+    <div class="recap-summary-item"><div class="summary-value">Memuat...</div></div>
+  `;
   chartContainer.innerHTML = `<div style="text-align:center;color:var(--text-muted);padding:40px;">Memuat diagram...</div>`;
   
   try {
     const startDate = `${selectedYear}-01-01`;
     const endDate = `${selectedYear}-12-31`;
     
-    // Ambil SEMUA tiket yang dibuat di tahun tersebut (semua status)
-    const { data: allTickets, error: errAll } = await supabaseClient
-      .from('tickets')
-      .select('id, created_at, completed_at, status')
-      .gte('created_at', `${startDate}T00:00:00`)
-      .lte('created_at', `${endDate}T23:59:59`)
-      .order('created_at', { ascending: true });
+    let allTickets = [];
+    let errAll = null;
+    
+    // Coba ambil dari Supabase
+    if (typeof supabaseClient !== 'undefined' && supabaseClient) {
+      const result = await supabaseClient
+        .from('tickets')
+        .select('id, created_at, completed_at, status')
+        .gte('created_at', `${startDate}T00:00:00`)
+        .lte('created_at', `${endDate}T23:59:59`)
+        .order('created_at', { ascending: true });
+      allTickets = result.data || [];
+      errAll = result.error;
+    } else {
+      errAll = new Error('Supabase client tidak tersedia');
+    }
     
     if (errAll) throw errAll;
     
-    const monthlyTotal = Array(12).fill(0);    // Total tiket masuk per bulan
-    const monthlySelesai = Array(12).fill(0);   // Total selesai per bulan
-    const monthlyTotalDays = Array(12).fill(0); // Total hari pengerjaan (yang selesai)
-    const currentMonth = new Date().getMonth();
+    const monthlyTotal = Array(12).fill(0);
+    const monthlySelesai = Array(12).fill(0);
+    const monthlyTotalDays = Array(12).fill(0);
     
     allTickets.forEach(ticket => {
       const createdDate = new Date(ticket.created_at);
@@ -965,7 +993,6 @@ async function fetchMonthlyRecap() {
         const month = createdDate.getMonth();
         monthlyTotal[month]++;
         
-        // Hitung yang selesai & lama pengerjaan
         if (ticket.status === 'Selesai' && ticket.completed_at) {
           const completedDate = new Date(ticket.completed_at);
           monthlySelesai[month]++;
@@ -976,13 +1003,6 @@ async function fetchMonthlyRecap() {
       }
     });
     
-    // Hitung rata-rata lama pengerjaan per bulan
-    const monthlyAvgDays = monthlySelesai.map((count, idx) => {
-      if (count === 0) return 0;
-      return monthlyTotalDays[idx] / count;
-    });
-    
-    // Total tahunan
     const totalYear = monthlyTotal.reduce((s, c) => s + c, 0);
     const totalSelesaiYear = monthlySelesai.reduce((s, c) => s + c, 0);
     const totalDaysYear = monthlyTotalDays.reduce((s, d) => s + d, 0);
@@ -1019,33 +1039,472 @@ async function fetchMonthlyRecap() {
       </div>
     `;
     
-    // Render bar chart (total tiket masuk per bulan)
-    const shortNames = ['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'];
-    const maxCount = Math.max(...monthlyTotal, 1);
-    const chartH = 160;
-    
-    let html = `<div class="recap-chart">`;
-    monthlyTotal.forEach((count, i) => {
-      const h = count > 0 ? (count / maxCount) * chartH : 0;
-      html += `
-        <div class="recap-chart-bar-wrapper">
-          ${count > 0
-            ? `<div class="recap-chart-bar" style="height:${h}px;" title="${shortNames[i]}: ${count} tiket masuk, ${monthlySelesai[i]} selesai">
-                 <span class="recap-chart-bar-value">${count}</span>
-               </div>`
-            : `<div class="recap-chart-bar-empty"></div>`
-          }
-          <span class="recap-chart-bar-label">${shortNames[i]}</span>
-        </div>`;
-    });
-    html += `</div>
-      <div class="recap-chart-legend">
-        <div class="recap-chart-legend-item"><span class="recap-chart-legend-dot"></span><span>Total tiket masuk per bulan</span></div>
-      </div>`;
-    chartContainer.innerHTML = html;
+    renderRecapChart(chartContainer, monthlyTotal, monthlySelesai);
     
   } catch (err) {
     console.error('Gagal memuat rekapitulasi bulanan:', err);
-    chartContainer.innerHTML = `<div style="text-align:center;color:#ef4444;padding:40px;">Gagal memuat diagram.</div>`;
+    summaryContainer.innerHTML = `
+      <div class="recap-summary-item" style="border-left:3px solid #ef4444;">
+        <div>
+          <span class="summary-label" style="color:#ef4444;">Gagal memuat data</span>
+          <span class="summary-value" style="font-size:0.8rem;">${escapeHtml(err.message || 'Terjadi kesalahan')}</span>
+        </div>
+      </div>
+    `;
+    // Tampilkan grafik kosong tetap
+    renderRecapChart(chartContainer, Array(12).fill(0), Array(12).fill(0));
   }
+}
+
+/**
+ * Render grafik batang rekapitulasi bulanan (selalu tampil Jan-Des)
+ */
+function renderRecapChart(container, monthlyTotal, monthlySelesai) {
+  const shortNames = ['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'];
+  const maxCount = Math.max(...monthlyTotal, 1);
+  const chartH = 160;
+  
+  let html = `<div class="recap-chart">`;
+  monthlyTotal.forEach((count, i) => {
+    const h = count > 0 ? (count / maxCount) * chartH : 0;
+    html += `
+      <div class="recap-chart-bar-wrapper">
+        ${count > 0
+          ? `<div class="recap-chart-bar" style="height:${h}px;" title="${shortNames[i]}: ${count} tiket masuk, ${monthlySelesai[i]} selesai">
+               <span class="recap-chart-bar-value">${count}</span>
+             </div>`
+          : `<div class="recap-chart-bar-empty"></div>`
+        }
+        <span class="recap-chart-bar-label">${shortNames[i]}</span>
+      </div>`;
+  });
+  html += `</div>
+    <div class="recap-chart-legend">
+      <div class="recap-chart-legend-item"><span class="recap-chart-legend-dot"></span><span>Total tiket masuk per bulan</span></div>
+    </div>`;
+  container.innerHTML = html;
+}
+
+/* ============================================================
+   KWITANSI / PAYMENT RECEIPT FUNCTIONS
+   ============================================================ */
+
+let receipts = [];
+let receiptTicketsCache = [];
+
+/**
+ * Konversi angka ke terbilang bahasa Indonesia untuk Rupiah
+ */
+function numberToWordsRupiah(num) {
+  if (num === 0 || num === '0') return 'Nol Rupiah';
+  const number = parseInt(num, 10);
+  if (isNaN(number)) return '';
+
+  const units = ['', 'Satu', 'Dua', 'Tiga', 'Empat', 'Lima', 'Enam', 'Tujuh', 'Delapan', 'Sembilan'];
+  const teens = ['Sepuluh', 'Sebelas', 'Dua Belas', 'Tiga Belas', 'Empat Belas', 'Lima Belas', 'Enam Belas', 'Tujuh Belas', 'Delapan Belas', 'Sembilan Belas'];
+  const tens = ['', 'Sepuluh', 'Dua Puluh', 'Tiga Puluh', 'Empat Puluh', 'Lima Puluh', 'Enam Puluh', 'Tujuh Puluh', 'Delapan Puluh', 'Sembilan Puluh'];
+  const thousands = ['', 'Ribu', 'Juta', 'Miliar', 'Triliun'];
+
+  function convertThreeDigits(n) {
+    let result = '';
+    const hundred = Math.floor(n / 100);
+    const remainder = n % 100;
+    const ten = Math.floor(remainder / 10);
+    const unit = remainder % 10;
+
+    if (hundred === 1) {
+      result += 'Seratus ';
+    } else if (hundred > 1) {
+      result += units[hundred] + ' Ratus ';
+    }
+
+    if (remainder > 0) {
+      if (remainder < 10) {
+        result += units[unit];
+      } else if (remainder >= 10 && remainder < 20) {
+        result += teens[unit];
+      } else {
+        result += tens[ten];
+        if (unit > 0) result += ' ' + units[unit];
+      }
+    }
+
+    return result.trim();
+  }
+
+  if (number === 0) return 'Nol Rupiah';
+
+  let temp = number;
+  let chunkIndex = 0;
+  let words = '';
+
+  while (temp > 0) {
+    const chunk = temp % 1000;
+    temp = Math.floor(temp / 1000);
+
+    if (chunk > 0) {
+      let chunkWords = convertThreeDigits(chunk);
+      if (chunkIndex === 1 && chunk === 1) {
+        chunkWords = 'Seribu';
+      } else if (chunkIndex > 0) {
+        chunkWords += ' ' + thousands[chunkIndex];
+      }
+      words = chunkWords + (words ? ' ' + words : '');
+    }
+    chunkIndex++;
+  }
+
+  return words.trim() + ' Rupiah';
+}
+
+/**
+ * Format angka ke Rupiah
+ */
+function formatRupiah(num) {
+  const number = parseInt(num, 10) || 0;
+  return 'Rp ' + number.toLocaleString('id-ID') + ',-';
+}
+
+/**
+ * Format tanggal ke Indonesia: 30 Juni 2026
+ */
+function formatDateIndonesian(dateStr) {
+  const months = ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return dateStr;
+  return `${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()}`;
+}
+
+/**
+ * Format tanggal ISO untuk input date
+ */
+function toISODateInput(date) {
+  const d = new Date(date);
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+/**
+ * Generate nomor kwitansi KW-YYYY-NNNN
+ */
+async function generateReceiptNumber() {
+  const year = new Date().getFullYear();
+  let nextNumber = 1;
+
+  try {
+    if (typeof supabaseClient !== 'undefined' && supabaseClient) {
+      const { data, error } = await supabaseClient
+        .from('receipts')
+        .select('receipt_number')
+        .ilike('receipt_number', `KW-${year}-%`)
+        .order('receipt_number', { ascending: false })
+        .limit(1);
+
+      if (!error && data && data.length > 0) {
+        const last = data[0].receipt_number;
+        const match = last.match(/KW-\d{4}-(\d+)/);
+        if (match) {
+          nextNumber = parseInt(match[1], 10) + 1;
+        }
+      }
+    }
+  } catch (e) {
+    console.error('Gagal generate nomor kwitansi:', e);
+  }
+
+  return `KW-${year}-${String(nextNumber).padStart(4, '0')}`;
+}
+
+/**
+ * Inisialisasi form kwitansi: tanggal hari ini & nomor otomatis
+ */
+async function initReceiptForm() {
+  const dateInput = document.getElementById('receipt-date');
+  const numberInput = document.getElementById('receipt-number');
+
+  if (dateInput && !dateInput.value) {
+    dateInput.value = toISODateInput(new Date());
+  }
+
+  if (numberInput && !numberInput.value) {
+    numberInput.value = await generateReceiptNumber();
+  }
+
+  await loadReceiptTicketOptions();
+}
+
+/**
+ * Muat pilihan tiket selesai ke dropdown kwitansi
+ */
+async function loadReceiptTicketOptions() {
+  const select = document.getElementById('receipt-ticket-select');
+  if (!select) return;
+
+  // Simpan pilihan yang sedang aktif (jika sedang edit)
+  const currentValue = select.value;
+
+  try {
+    let allTickets = [];
+    if (typeof supabaseClient !== 'undefined' && supabaseClient) {
+      const { data, error } = await supabaseClient
+        .from('tickets')
+        .select('id, customer_name, device_info, issue, status, completed_at')
+        .order('completed_at', { ascending: false });
+
+      if (!error) allTickets = data || [];
+    }
+
+    receiptTicketsCache = allTickets;
+
+    let html = '<option value="">-- Pilih tiket --</option>';
+    allTickets.forEach(ticket => {
+      const ticketId = 'TX.' + String(ticket.id).padStart(3, '0');
+      const label = `${ticketId} - ${ticket.customer_name} (${ticket.device_info}) [${ticket.status}]`;
+      html += `<option value="${ticket.id}">${escapeHtml(label)}</option>`;
+    });
+
+    select.innerHTML = html;
+    select.value = currentValue;
+  } catch (e) {
+    console.error('Gagal memuat pilihan tiket:', e);
+  }
+}
+
+/**
+ * Isi otomatis form kwitansi saat tiket dipilih
+ */
+function fillReceiptFromTicket() {
+  const select = document.getElementById('receipt-ticket-select');
+  const receivedInput = document.getElementById('receipt-received-from');
+  const paymentForInput = document.getElementById('receipt-payment-for');
+
+  if (!select || !receivedInput || !paymentForInput) return;
+
+  const ticketId = parseInt(select.value, 10);
+  if (!ticketId) {
+    receivedInput.value = '';
+    paymentForInput.value = '';
+    return;
+  }
+
+  const ticket = receiptTicketsCache.find(t => t.id === ticketId);
+  if (!ticket) return;
+
+  receivedInput.value = ticket.customer_name || '';
+  paymentForInput.value = `Perbaikan ${ticket.device_info || ''} sesuai keluhan: ${ticket.issue || ''}`;
+}
+
+/**
+ * Konversi input jumlah uang ke terbilang
+ */
+function convertAmountToWords() {
+  const amountInput = document.getElementById('receipt-amount');
+  const wordsInput = document.getElementById('receipt-amount-words');
+  if (!amountInput || !wordsInput) return;
+
+  wordsInput.value = numberToWordsRupiah(amountInput.value);
+}
+
+/**
+ * Ambil daftar kwitansi dari database
+ */
+async function fetchReceipts() {
+  const tbody = document.getElementById('admin-receipts-tbody');
+  if (!tbody) return;
+
+  tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--text-muted);padding:24px;">Memuat data kwitansi...</td></tr>';
+
+  try {
+    let data = [];
+    let error = null;
+
+    if (typeof supabaseClient !== 'undefined' && supabaseClient) {
+      const result = await supabaseClient
+        .from('receipts')
+        .select('*, tickets(id, customer_name, device_info)')
+        .order('created_at', { ascending: false });
+      data = result.data || [];
+      error = result.error;
+    } else {
+      error = new Error('Supabase client tidak tersedia');
+    }
+
+    if (error) throw error;
+
+    receipts = data;
+    renderReceipts(receipts);
+  } catch (err) {
+    console.error('Gagal memuat kwitansi:', err);
+    tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;color:#ef4444;padding:24px;">Gagal memuat kwitansi: ${escapeHtml(err.message || 'Error')}</td></tr>`;
+  }
+}
+
+/**
+ * Render daftar kwitansi ke tabel
+ */
+function renderReceipts(list) {
+  const tbody = document.getElementById('admin-receipts-tbody');
+  if (!tbody) return;
+
+  if (!list || list.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--text-muted);padding:24px;">Belum ada kwitansi. Buat kwitansi baru dari form di sebelah kiri.</td></tr>';
+    return;
+  }
+
+  let html = '';
+  list.forEach(receipt => {
+    const customer = receipt.tickets ? receipt.tickets.customer_name : '-';
+    const dateDisplay = formatDateIndonesian(receipt.receipt_date);
+
+    html += `
+      <tr>
+        <td><strong>${escapeHtml(receipt.receipt_number)}</strong></td>
+        <td>${escapeHtml(customer)}</td>
+        <td>${formatRupiah(receipt.amount)}</td>
+        <td>${dateDisplay}</td>
+        <td style="text-align:center;">
+          <div style="display:flex;gap:6px;justify-content:center;">
+            <button class="btn-edit" onclick='printPaymentReceiptById(${receipt.id})' title="Cetak Kwitansi" style="padding: 4px 8px; color: #4f46e5; border-color: #c7d2fe;">
+              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+            </button>
+            <button class="btn-delete" onclick='deleteReceipt(${receipt.id})' title="Hapus Kwitansi" style="padding: 4px 8px;">
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+            </button>
+          </div>
+        </td>
+      </tr>
+    `;
+  });
+
+  tbody.innerHTML = html;
+}
+
+/**
+ * Simpan kwitansi ke database lalu cetak
+ */
+async function saveReceipt(event) {
+  event.preventDefault();
+
+  const ticketSelect = document.getElementById('receipt-ticket-select');
+  const numberInput = document.getElementById('receipt-number');
+  const receivedInput = document.getElementById('receipt-received-from');
+  const amountInput = document.getElementById('receipt-amount');
+  const wordsInput = document.getElementById('receipt-amount-words');
+  const paymentForInput = document.getElementById('receipt-payment-for');
+  const dateInput = document.getElementById('receipt-date');
+  const warrantyInput = document.getElementById('receipt-warranty');
+  const locationInput = document.getElementById('receipt-location');
+  const cashierInput = document.getElementById('receipt-cashier');
+
+  const ticketId = parseInt(ticketSelect.value, 10);
+  if (!ticketId) {
+    alert('Pilih tiket terlebih dahulu.');
+    return;
+  }
+
+  const receiptData = {
+    ticket_id: ticketId,
+    receipt_number: numberInput.value.trim(),
+    received_from: receivedInput.value.trim(),
+    amount: parseInt(amountInput.value, 10) || 0,
+    amount_in_words: wordsInput.value.trim(),
+    payment_for: paymentForInput.value.trim(),
+    receipt_date: dateInput.value,
+    location: locationInput.value.trim(),
+    cashier_name: cashierInput.value.trim(),
+    warranty_days: parseInt(warrantyInput.value, 10) || 0
+  };
+
+  try {
+    if (!supabaseClient) throw new Error('Supabase client belum tersedia.');
+
+    const { data, error } = await supabaseClient
+      .from('receipts')
+      .insert([receiptData])
+      .select('*, tickets(id, customer_name, device_info, issue)')
+      .single();
+
+    if (error) throw error;
+
+    // Reset form sebagian, generate nomor baru
+    ticketSelect.value = '';
+    receivedInput.value = '';
+    amountInput.value = '';
+    wordsInput.value = '';
+    paymentForInput.value = '';
+    numberInput.value = await generateReceiptNumber();
+
+    await fetchReceipts();
+
+    // Cetak kwitansi
+    if (data) printPaymentReceipt(data);
+
+  } catch (err) {
+    console.error('Gagal menyimpan kwitansi:', err);
+    alert('Gagal menyimpan kwitansi: ' + (err.message || 'Error'));
+  }
+}
+
+/**
+ * Hapus kwitansi
+ */
+async function deleteReceipt(id) {
+  if (!confirm('Yakin ingin menghapus kwitansi ini?')) return;
+
+  try {
+    if (!supabaseClient) throw new Error('Supabase client belum tersedia.');
+
+    const { error } = await supabaseClient
+      .from('receipts')
+      .delete()
+      .eq('id', id);
+
+    if (error) throw error;
+
+    await fetchReceipts();
+  } catch (err) {
+    console.error('Gagal menghapus kwitansi:', err);
+    alert('Gagal menghapus kwitansi: ' + (err.message || 'Error'));
+  }
+}
+
+/**
+ * Cetak kwitansi berdasarkan ID
+ */
+async function printPaymentReceiptById(id) {
+  const receipt = receipts.find(r => r.id === id);
+  if (!receipt) {
+    alert('Kwitansi tidak ditemukan.');
+    return;
+  }
+  printPaymentReceipt(receipt);
+}
+
+/**
+ * Tampilkan dan cetak kwitansi pembayaran
+ */
+function printPaymentReceipt(receipt) {
+  const container = document.getElementById('print-payment-receipt-container');
+  if (!container) return;
+
+  const ticket = receipt.tickets || {};
+  const ticketIdText = ticket.id ? '#TS-' + String(ticket.id).padStart(4, '0') : '-';
+
+  document.getElementById('print-receipt-number').textContent = receipt.receipt_number || '-';
+  document.getElementById('print-receipt-date').textContent = formatDateIndonesian(receipt.receipt_date);
+  document.getElementById('print-receipt-received').textContent = receipt.received_from || '-';
+  document.getElementById('print-receipt-words').textContent = receipt.amount_in_words || numberToWordsRupiah(receipt.amount);
+  document.getElementById('print-receipt-for').textContent = receipt.payment_for || '-';
+  document.getElementById('print-receipt-ticket').textContent = ticketIdText;
+  document.getElementById('print-receipt-amount').textContent = formatRupiah(receipt.amount);
+  document.getElementById('print-receipt-place-date').textContent = `${receipt.location || 'Samarinda'}, ${formatDateIndonesian(receipt.receipt_date)}`;
+  document.getElementById('print-receipt-cashier').textContent = receipt.cashier_name || 'Kasir';
+  document.getElementById('print-receipt-warranty').textContent = `Garansi Perbaikan: ${receipt.warranty_days || 0} Hari sejak tanggal penyerahan barang kembali.`;
+
+  // Tampilkan sementara untuk print, lalu sembunyikan lagi
+  container.style.display = 'block';
+  window.print();
+  container.style.display = 'none';
 }

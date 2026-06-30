@@ -125,4 +125,30 @@ CREATE TABLE `tickets` (
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `receipts`
+-- Kwitansi pembayaran yang terhubung dengan tiket servis
+--
+
+CREATE TABLE `receipts` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `ticket_id` int(11) NOT NULL,
+  `receipt_number` varchar(50) NOT NULL,
+  `received_from` varchar(100) NOT NULL,
+  `amount` decimal(12,0) NOT NULL,
+  `amount_in_words` varchar(255) NOT NULL,
+  `payment_for` text NOT NULL,
+  `receipt_date` date NOT NULL,
+  `location` varchar(100) DEFAULT 'Samarinda',
+  `cashier_name` varchar(100) DEFAULT 'Defry Danovant',
+  `warranty_days` int(11) DEFAULT 30,
+  `created_at` datetime DEFAULT current_timestamp(),
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `receipt_number` (`receipt_number`),
+  KEY `ticket_id` (`ticket_id`),
+  CONSTRAINT `fk_receipt_ticket` FOREIGN KEY (`ticket_id`) REFERENCES `tickets` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
 COMMIT;
