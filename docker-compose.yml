@@ -1,0 +1,28 @@
+version: '3.8'
+
+services:
+  # 1. Service untuk Web Server + PHP
+  web:
+    image: php:8.2-apache
+    ports:
+      - "8080:80"
+    volumes:
+      # Perintah di bawah ini menghubungkan folder laptop kamu ke dalam Docker.
+      # Jadi kalau kamu edit file di laptop, di dalam Docker otomatis ikut berubah!
+      - .:/var/www/html
+    restart: always
+
+  # 2. Service untuk Database MySQL lokal (jika kamu membutuhkannya selain Supabase)
+  db:
+    image: mysql:8.0
+    ports:
+      - "3306:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: root_password
+      MYSQL_DATABASE: it_support_kb
+    volumes:
+      - db_data:/var/lib/mysql
+    restart: always
+
+volumes:
+  db_data:
