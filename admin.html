@@ -227,42 +227,6 @@
           </div>
         </div>
 
-        <!-- Monthly Recap Dashboard -->
-        <section class="admin-card" style="margin-bottom: 24px;">
-          <h2 class="admin-card-title">
-            <span style="display:flex;align-items:center;gap:8px;">
-              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#16a34a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
-              Rekapitulasi Perbaikan Selesai
-            </span>
-            <select id="recap-year-select" class="form-input" style="width:auto;height:36px;font-size:0.85rem;padding:0 32px 0 12px;" onchange="fetchMonthlyRecap()">
-            </select>
-          </h2>
-          <p style="font-size:0.85rem;color:var(--text-muted);margin-bottom:16px;">Total tiket perbaikan yang masuk, diringkas per bulan.</p>
-
-          <!-- Yearly Summary Bar -->
-          <div id="recap-yearly-summary" class="recap-yearly-summary"></div>
-
-          <!-- Bar Chart Visualization -->
-          <div id="recap-chart-container" class="recap-chart-container"></div>
-
-          <!-- Monthly Table -->
-          <div class="table-wrapper" style="margin-top:20px;">
-            <table class="admin-table recap-table">
-              <thead>
-                <tr>
-                  <th style="width:50px;text-align:center;">#</th>
-                  <th>Bulan</th>
-                  <th style="width:120px;text-align:center;">Total Tiket</th>
-                  <th style="width:160px;text-align:center;">Rata-rata Lama Pengerjaan</th>
-                </tr>
-              </thead>
-              <tbody id="recap-monthly-tbody">
-                <tr><td colspan="4" style="text-align:center;color:var(--text-muted);padding:24px;">Memuat data...</td></tr>
-              </tbody>
-            </table>
-          </div>
-        </section>
-
         <div class="admin-grid" style="margin-top: 24px;">
           <!-- Ticket Form -->
           <section class="admin-card">
@@ -298,15 +262,6 @@
           <!-- Ticket List -->
           <section class="admin-card">
             <h2 class="admin-card-title">Daftar Antrean Tiket</h2>
-            
-            <!-- Search Bar -->
-            <div class="ticket-search-bar">
-              <div class="ticket-search-input-wrapper">
-                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-                <input type="text" id="ticket-search-input" class="ticket-search-input" placeholder="Cari nomor tiket atau nama pelanggan..." oninput="filterTickets()">
-              </div>
-            </div>
-
             <div class="table-wrapper">
               <table class="admin-table">
                 <thead>

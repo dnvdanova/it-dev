@@ -533,8 +533,6 @@ function switchTab(tabName) {
     // Muat data khusus tab tiket saat dibuka
     fetchDashboardStats();
     fetchTickets();
-    initRecapYearSelector();
-    fetchMonthlyRecap();
   }
 }
 
@@ -550,8 +548,6 @@ showDashboard = function () {
   if (tabTicketsBtn && tabTicketsBtn.classList.contains('active')) {
     fetchDashboardStats();
     fetchTickets();
-    initRecapYearSelector();
-    fetchMonthlyRecap();
   }
 };
 
@@ -614,19 +610,17 @@ async function fetchTickets() {
 
 /**
  * Render Tabel Tiket ke layar
- * @param {Array} list - Daftar tiket yang akan ditampilkan (default: semua tiket)
  */
-function renderTickets(list) {
-  const dataToShow = list || tickets;
+function renderTickets() {
   const tbody = document.getElementById('admin-tickets-tbody');
   tbody.innerHTML = '';
 
-  if (dataToShow.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="3" style="text-align: center; color: var(--text-muted); padding: 24px;">Tidak ada tiket yang ditemukan.</td></tr>`;
+  if (tickets.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="3" style="text-align: center; color: var(--text-muted); padding: 24px;">Belum ada tiket servis.</td></tr>`;
     return;
   }
 
-  dataToShow.forEach(ticket => {
+  tickets.forEach(ticket => {
     const tr = document.createElement('tr');
 
     // Tentukan kelas badge berdasarkan status
@@ -684,29 +678,6 @@ function renderTickets(list) {
     `;
     tbody.appendChild(tr);
   });
-}
-
-/**
- * Filter tiket berdasarkan input pencarian (nomor tiket atau nama pelanggan)
- */
-function filterTickets() {
-  const input = document.getElementById('ticket-search-input');
-  if (!input) return;
-  
-  const query = input.value.trim().toLowerCase();
-  
-  if (query === '') {
-    renderTickets(tickets);
-    return;
-  }
-  
-  const filtered = tickets.filter(ticket => {
-    const ticketId = 'TX.' + String(ticket.id).padStart(3, '0');
-    const name = (ticket.customer_name || '').toLowerCase();
-    return ticketId.toLowerCase().includes(query) || name.includes(query);
-  });
-  
-  renderTickets(filtered);
 }
 
 /**
@@ -779,7 +750,6 @@ async function updateTicketStatus(id, newStatus) {
     // Refresh
     fetchDashboardStats();
     fetchTickets();
-    fetchMonthlyRecap();
     showToast("Status tiket berhasil diperbarui!", "success");
   } catch (err) {
     showToast("Gagal mengupdate status tiket.", "error");
@@ -803,7 +773,6 @@ async function deleteTicket(id) {
 
     fetchDashboardStats();
     fetchTickets();
-    fetchMonthlyRecap();
     showToast("Tiket berhasil dihapus.", "success");
   } catch (err) {
     showToast("Gagal menghapus tiket.", "error");
@@ -882,202 +851,4 @@ function showToast(message, type = 'success') {
     toast.classList.remove('show');
     setTimeout(() => toast.remove(), 400); // Tunggu animasi CSS selesai baru hapus node
   }, 3500);
-}
-
-/* ==========================================================================
-   MONTHLY RECAP DASHBOARD - Perbaikan Selesai
-   ========================================================================== */
-
-/**
- * Inisialisasi dropdown tahun pada rekapitulasi bulanan
- */
-function initRecapYearSelector() {
-  const yearSelect = document.getElementById('recap-year-select');
-  if (!yearSelect) return;
-
-  const currentYear = new Date().getFullYear();
-  const startYear = 2020; // Tahun awal yang ditampilkan
-  
-  yearSelect.innerHTML = '';
-  
-  for (let year = currentYear; year >= startYear; year--) {
-    const option = document.createElement('option');
-    option.value = year;
-    option.textContent = `Tahun ${year}`;
-    yearSelect.appendChild(option);
-  }
-  
-  // Set default ke tahun sekarang
-  yearSelect.value = currentYear;
-}
-
-/**
- * Format decimal days menjadi string "X hari Y jam"
- * @param {number} daysDecimal - Jumlah hari dalam desimal (misal 2.3)
- * @returns {string} Format "X hari Y jam" atau "Y jam" jika kurang dari 1 hari
- */
-function formatDaysHours(daysDecimal) {
-  if (daysDecimal <= 0) return '-';
-  const days = Math.floor(daysDecimal);
-  const hours = Math.round((daysDecimal - days) * 24);
-  
-  if (days === 0 && hours === 0) return 'Kurang dari 1 jam';
-  if (days === 0) return `${hours} jam`;
-  if (hours === 0) return `${days} hari`;
-  return `${days} hari ${hours} jam`;
-}
-
-/**
- * Mengambil data tiket dan menghitung statistik bulanan (total tiket masuk per bulan)
- */
-async function fetchMonthlyRecap() {
-  const yearSelect = document.getElementById('recap-year-select');
-  if (!yearSelect) return;
-  
-  const selectedYear = parseInt(yearSelect.value);
-  const tbody = document.getElementById('recap-monthly-tbody');
-  const summaryContainer = document.getElementById('recap-yearly-summary');
-  const chartContainer = document.getElementById('recap-chart-container');
-  
-  tbody.innerHTML = `<tr><td colspan="4" style="text-align:center;color:var(--text-muted);padding:24px;">Memuat data rekapitulasi...</td></tr>`;
-  chartContainer.innerHTML = `<div style="text-align:center;color:var(--text-muted);padding:40px;">Memuat diagram...</div>`;
-  
-  try {
-    const startDate = `${selectedYear}-01-01`;
-    const endDate = `${selectedYear}-12-31`;
-    
-    // Ambil SEMUA tiket yang dibuat di tahun tersebut (semua status)
-    const { data: allTickets, error: errAll } = await supabaseClient
-      .from('tickets')
-      .select('id, created_at, completed_at, status')
-      .gte('created_at', `${startDate}T00:00:00`)
-      .lte('created_at', `${endDate}T23:59:59`)
-      .order('created_at', { ascending: true });
-    
-    if (errAll) throw errAll;
-    
-    const monthlyTotal = Array(12).fill(0);    // Total tiket masuk per bulan
-    const monthlySelesai = Array(12).fill(0);   // Total selesai per bulan
-    const monthlyTotalDays = Array(12).fill(0); // Total hari pengerjaan (yang selesai)
-    const currentMonth = new Date().getMonth();
-    
-    allTickets.forEach(ticket => {
-      const createdDate = new Date(ticket.created_at);
-      if (createdDate.getFullYear() === selectedYear) {
-        const month = createdDate.getMonth();
-        monthlyTotal[month]++;
-        
-        // Hitung yang selesai & lama pengerjaan
-        if (ticket.status === 'Selesai' && ticket.completed_at) {
-          const completedDate = new Date(ticket.completed_at);
-          monthlySelesai[month]++;
-          const diffMs = completedDate - createdDate;
-          const diffDays = diffMs / (1000 * 60 * 60 * 24);
-          monthlyTotalDays[month] += diffDays;
-        }
-      }
-    });
-    
-    // Hitung rata-rata lama pengerjaan per bulan
-    const monthlyAvgDays = monthlySelesai.map((count, idx) => {
-      if (count === 0) return 0;
-      return monthlyTotalDays[idx] / count;
-    });
-    
-    // Total tahunan
-    const totalYear = monthlyTotal.reduce((s, c) => s + c, 0);
-    const totalSelesaiYear = monthlySelesai.reduce((s, c) => s + c, 0);
-    const totalDaysYear = monthlyTotalDays.reduce((s, d) => s + d, 0);
-    const avgDaysYear = totalSelesaiYear > 0 ? (totalDaysYear / totalSelesaiYear) : 0;
-    
-    // Render summary
-    summaryContainer.innerHTML = `
-      <div class="recap-summary-item">
-        <div class="summary-icon" style="background:#e0f2fe;color:#0284c7;">
-          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-        </div>
-        <div>
-          <span class="summary-label">Total Tiket Masuk ${selectedYear}</span>
-          <span class="summary-value">${totalYear} tiket</span>
-        </div>
-      </div>
-      <div class="recap-summary-item">
-        <div class="summary-icon" style="background:#dcfce7;color:#16a34a;">
-          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
-        </div>
-        <div>
-          <span class="summary-label">Selesai ${selectedYear}</span>
-          <span class="summary-value">${totalSelesaiYear} perbaikan</span>
-        </div>
-      </div>
-      <div class="recap-summary-item">
-        <div class="summary-icon" style="background:#fef3c7;color:#d97706;">
-          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-        </div>
-        <div>
-          <span class="summary-label">Rata-rata Lama Pengerjaan</span>
-          <span class="summary-value">${formatDaysHours(avgDaysYear)}</span>
-        </div>
-      </div>
-    `;
-    
-    // Render bar chart (total tiket masuk per bulan)
-    const shortNames = ['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'];
-    const maxCount = Math.max(...monthlyTotal, 1);
-    const chartH = 160;
-    
-    let html = `<div class="recap-chart">`;
-    monthlyTotal.forEach((count, i) => {
-      const h = count > 0 ? (count / maxCount) * chartH : 0;
-      const isNow = (selectedYear === new Date().getFullYear() && i === currentMonth);
-      html += `
-        <div class="recap-chart-bar-wrapper">
-          ${count > 0
-            ? `<div class="recap-chart-bar" style="height:${h}px;${isNow ? 'background:linear-gradient(180deg,#3b82f6 0%,#2563eb 100%);':''}" title="${shortNames[i]}: ${count} tiket masuk, ${monthlySelesai[i]} selesai">
-                 <span class="recap-chart-bar-value">${count}</span>
-               </div>`
-            : `<div class="recap-chart-bar-empty"></div>`
-          }
-          <span class="recap-chart-bar-label" ${isNow ? 'style="color:#2563eb;font-weight:700;"' : ''}>${shortNames[i]}</span>
-        </div>`;
-    });
-    html += `</div>
-      <div class="recap-chart-legend">
-        <div class="recap-chart-legend-item"><span class="recap-chart-legend-dot"></span><span>Total tiket masuk per bulan</span></div>
-      </div>`;
-    chartContainer.innerHTML = html;
-    
-    // Render table
-    const fullNames = ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
-    tbody.innerHTML = '';
-    fullNames.forEach((name, i) => {
-      const total = monthlyTotal[i];
-      const selesai = monthlySelesai[i];
-      const avgD = selesai > 0 ? formatDaysHours(monthlyAvgDays[i]) : '-';
-      const isNow = (selectedYear === new Date().getFullYear() && i === currentMonth);
-      
-      const tr = document.createElement('tr');
-      tr.className = isNow ? 'recap-current-month' : '';
-      tr.innerHTML = `
-        <td style="text-align:center;color:var(--text-muted);font-weight:600;">${i + 1}</td>
-        <td>
-          <span class="recap-month-name">${name} ${selectedYear}</span>
-          ${isNow ? '<span style="font-size:0.7rem;background:#16a34a;color:#fff;padding:2px 6px;border-radius:4px;margin-left:6px;">BULAN INI</span>' : ''}
-        </td>
-        <td style="text-align:center;">
-          <span class="recap-count-badge" style="background:#e0f2fe;color:#0284c7;">${total}</span>
-          ${selesai > 0 ? `<span style="font-size:0.75rem;color:#16a34a;margin-left:6px;">(${selesai} selesai)</span>` : ''}
-        </td>
-        <td style="text-align:center;">
-          <span class="recap-avg">${avgD === '-' ? '<span style="color:var(--text-muted);font-weight:400;">-</span>' : avgD}</span>
-        </td>
-      `;
-      tbody.appendChild(tr);
-    });
-    
-  } catch (err) {
-    console.error('Gagal memuat rekapitulasi bulanan:', err);
-    tbody.innerHTML = `<tr><td colspan="4" style="text-align:center;color:#ef4444;padding:24px;">Gagal memuat data.</td></tr>`;
-    chartContainer.innerHTML = `<div style="text-align:center;color:#ef4444;padding:40px;">Gagal memuat diagram.</div>`;
-  }
 }
