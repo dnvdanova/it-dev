@@ -935,11 +935,9 @@ async function fetchMonthlyRecap() {
   if (!yearSelect) return;
   
   const selectedYear = parseInt(yearSelect.value);
-  const tbody = document.getElementById('recap-monthly-tbody');
   const summaryContainer = document.getElementById('recap-yearly-summary');
   const chartContainer = document.getElementById('recap-chart-container');
   
-  tbody.innerHTML = `<tr><td colspan="4" style="text-align:center;color:var(--text-muted);padding:24px;">Memuat data rekapitulasi...</td></tr>`;
   chartContainer.innerHTML = `<div style="text-align:center;color:var(--text-muted);padding:40px;">Memuat diagram...</div>`;
   
   try {
@@ -1029,16 +1027,15 @@ async function fetchMonthlyRecap() {
     let html = `<div class="recap-chart">`;
     monthlyTotal.forEach((count, i) => {
       const h = count > 0 ? (count / maxCount) * chartH : 0;
-      const isNow = (selectedYear === new Date().getFullYear() && i === currentMonth);
       html += `
         <div class="recap-chart-bar-wrapper">
           ${count > 0
-            ? `<div class="recap-chart-bar" style="height:${h}px;${isNow ? 'background:linear-gradient(180deg,#3b82f6 0%,#2563eb 100%);':''}" title="${shortNames[i]}: ${count} tiket masuk, ${monthlySelesai[i]} selesai">
+            ? `<div class="recap-chart-bar" style="height:${h}px;" title="${shortNames[i]}: ${count} tiket masuk, ${monthlySelesai[i]} selesai">
                  <span class="recap-chart-bar-value">${count}</span>
                </div>`
             : `<div class="recap-chart-bar-empty"></div>`
           }
-          <span class="recap-chart-bar-label" ${isNow ? 'style="color:#2563eb;font-weight:700;"' : ''}>${shortNames[i]}</span>
+          <span class="recap-chart-bar-label">${shortNames[i]}</span>
         </div>`;
     });
     html += `</div>
@@ -1047,37 +1044,8 @@ async function fetchMonthlyRecap() {
       </div>`;
     chartContainer.innerHTML = html;
     
-    // Render table
-    const fullNames = ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
-    tbody.innerHTML = '';
-    fullNames.forEach((name, i) => {
-      const total = monthlyTotal[i];
-      const selesai = monthlySelesai[i];
-      const avgD = selesai > 0 ? formatDaysHours(monthlyAvgDays[i]) : '-';
-      const isNow = (selectedYear === new Date().getFullYear() && i === currentMonth);
-      
-      const tr = document.createElement('tr');
-      tr.className = isNow ? 'recap-current-month' : '';
-      tr.innerHTML = `
-        <td style="text-align:center;color:var(--text-muted);font-weight:600;">${i + 1}</td>
-        <td>
-          <span class="recap-month-name">${name} ${selectedYear}</span>
-          ${isNow ? '<span style="font-size:0.7rem;background:#16a34a;color:#fff;padding:2px 6px;border-radius:4px;margin-left:6px;">BULAN INI</span>' : ''}
-        </td>
-        <td style="text-align:center;">
-          <span class="recap-count-badge" style="background:#e0f2fe;color:#0284c7;">${total}</span>
-          ${selesai > 0 ? `<span style="font-size:0.75rem;color:#16a34a;margin-left:6px;">(${selesai} selesai)</span>` : ''}
-        </td>
-        <td style="text-align:center;">
-          <span class="recap-avg">${avgD === '-' ? '<span style="color:var(--text-muted);font-weight:400;">-</span>' : avgD}</span>
-        </td>
-      `;
-      tbody.appendChild(tr);
-    });
-    
   } catch (err) {
     console.error('Gagal memuat rekapitulasi bulanan:', err);
-    tbody.innerHTML = `<tr><td colspan="4" style="text-align:center;color:#ef4444;padding:24px;">Gagal memuat data.</td></tr>`;
     chartContainer.innerHTML = `<div style="text-align:center;color:#ef4444;padding:40px;">Gagal memuat diagram.</div>`;
   }
 }
